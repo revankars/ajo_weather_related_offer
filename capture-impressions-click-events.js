@@ -19,7 +19,7 @@ navigator.geolocation.getCurrentPosition(pos => {
         renderDecisions: true,
         personalization: {
           surfaces: [
-            "web://gbedekar489.github.io/weather/weather-offers.html#offerContainer"
+            "web://revankars.github.io/ajo_weather_related_offer/weather-offers.html#offerContainer"
           ]
         },
         xdm: {
