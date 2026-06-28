@@ -39,7 +39,7 @@ function sendWeatherDataToAEP() {
           renderDecisions: true,
           personalization: {
             surfaces: [
-              "web://gbedekar489.github.io/weather/weather-offers-json.html#offerContainer"
+              "web://revankars.github.io/weather/weather-offers-json.html#offerContainer"
             ]
           },
           xdm: {
