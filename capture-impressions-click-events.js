@@ -24,7 +24,7 @@ navigator.geolocation.getCurrentPosition(pos => {
         },
         xdm: {
           eventType: "decisioning.request",
-          _techmarketingdemos: {
+          _dentsuglobalpartnersbx: {
             temperature: temp,
             weatherConditions: condition,
             cityName: city
@@ -69,7 +69,7 @@ navigator.geolocation.getCurrentPosition(pos => {
                 el.addEventListener("click", () => {
                   const ecidValue = getECID();
                   if (!ecidValue || !offerId || !trackingToken) {
-                    console.warn("Girish!!!!  Missing ECID, offerId, or trackingToken. Interaction event not sent.");
+                    console.warn("Missing ECID, offerId, or trackingToken. Interaction event not sent.!!!!");
                     return;
                   }
 
@@ -109,14 +109,14 @@ navigator.geolocation.getCurrentPosition(pos => {
         if (impressionItems.length > 0) {
           const ecidValue = getECID();
           if (!ecidValue) {
-            console.warn("Girish Missing ECID. Skipping impression.");
+            console.warn("Missing ECID. Skipping impression.");
             return;
           }
 
           // Send impression for each item
           impressionItems.forEach(({ id, token }) => {
             if (!id || !token) {
-              console.warn("Girish Missing offerId or trackingToken. Skipping impression.");
+              console.warn("Missing offerId or trackingToken. Skipping impression.");
               return;
             }
 
