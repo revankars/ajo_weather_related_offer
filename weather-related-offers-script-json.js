@@ -60,7 +60,7 @@ function sendWeatherDataToAEP() {
           offerDiv.innerHTML = "";
 
           if (!allOffers.length) {
-            offerDiv.innerHTML = "<p>No JSON offers returned.</p>";
+            offerDiv.innerHTML = "<p>No AJO JSON offers returned because Campaign or Offer is in deactivate state</p>";
             return;
           }
 
