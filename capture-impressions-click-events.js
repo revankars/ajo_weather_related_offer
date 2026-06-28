@@ -42,7 +42,7 @@ navigator.geolocation.getCurrentPosition(pos => {
         });
 
         if (!allOffers.length) {
-          offerDiv.innerHTML = "<p>No AJO offers returned.</p>";
+          offerDiv.innerHTML = "<p>No AJO offers returned because Campaign or Offer is in deactivate state</p>";
           return;
         }
 
