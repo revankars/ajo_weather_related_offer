@@ -65,11 +65,17 @@ function sendWeatherDataToAEP() {
           }
 
           allOffers.forEach(item => {
-            const decoded = decodeHtml(item.data?.content || "");
-            const wrapper = document.createElement("div");
-            wrapper.className = "offer";
-            wrapper.innerHTML = decoded;
-            offerDiv.appendChild(wrapper);
+            const contents = item.data?.content || [];
+            contents.forEach(contentItem => {
+              const html = contentItem["offer-item"] || "";
+              const decoded = decodeHtml(html);
+          
+              const wrapper = document.createElement("div");
+              wrapper.className = "offer";
+              wrapper.innerHTML = decoded;
+          
+              offerDiv.appendChild(wrapper);
+            });
           });
         }).catch(err => {
           console.error("❌ Personalization failed:", err);
