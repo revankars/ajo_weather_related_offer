@@ -63,7 +63,7 @@ navigator.geolocation.getCurrentPosition(pos => {
               }
 
               offerDiv.appendChild(child);
-
+              console.log("The appendChild",child)
               // Click tracking
               child.querySelectorAll("a, button").forEach(el => {
                 el.addEventListener("click", () => {
