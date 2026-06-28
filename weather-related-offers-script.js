@@ -38,7 +38,7 @@ function sendWeatherDataToAEP() {
           renderDecisions: true,
           personalization: {
             surfaces: [
-              "web://gbedekar489.github.io/weather/weather-offers.html#offerContainer"
+              "web://<Change this path>/weather-offers.html#offerContainer"
             ]
           },
           xdm: {
