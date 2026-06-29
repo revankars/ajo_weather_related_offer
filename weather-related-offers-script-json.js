@@ -71,10 +71,7 @@ function sendWeatherDataToAEP() {
 
           const allOffers = [];
           window.latestPropositions = response.propositions || [];
-          if (!allOffers.length) {
-            offerDiv.innerHTML = "<p>No AJO JSON offers returned because Campaign or Offer is in deactivate state</p>";
-            return;
-          }
+          
           (response.propositions || []).forEach(proposition => {
           (proposition.items || []).forEach(item => {
             allOffers.push({
@@ -86,6 +83,11 @@ function sendWeatherDataToAEP() {
             });
           });
         });
+
+        if (!allOffers.length) {
+            offerDiv.innerHTML = "<p>No AJO JSON offers returned because Campaign or Offer is in deactivate state</p>";
+            return;
+        }
 
         const impressionItems = [];
         allOffers.forEach(item => {
