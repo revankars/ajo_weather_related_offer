@@ -99,11 +99,11 @@ navigator.geolocation.getCurrentPosition(pos => {
                             interact: 1
                           },
                           propositionAction: {
-                            id: offer.offerId,
-                            tokens: [offer.trackingToken]
+                            id: item.offerId,
+                            tokens: [item.trackingToken]
                           },
                           
-                          propositions: [offer.proposition]
+                          propositions: [item.proposition]
                         }
                       }
                     }
