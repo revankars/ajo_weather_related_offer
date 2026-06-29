@@ -18,6 +18,21 @@ function decodeHtml(html) {
   return txt.value;
 }
 
+function generateUUID() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  );
+}
+
+function getECID() {
+  try {
+    return _satellite.getVar("ECID");
+  } catch (e) {
+    console.warn("ECID not available via _satellite.");
+    return null;
+  }
+}
+
 // Fetch weather and send context to AEP
 function sendWeatherDataToAEP() {
   navigator.geolocation.getCurrentPosition(pos => {
@@ -51,32 +66,126 @@ function sendWeatherDataToAEP() {
             }
           }
         }).then(response => {
-          const allOffers = [];
-          (response.propositions || []).forEach(p => {
-            allOffers.push(...(p.items || []));
-          });
-
           const offerDiv = document.getElementById("offerContainer");
           offerDiv.innerHTML = "";
 
+          const allOffers = [];
+          window.latestPropositions = response.propositions || [];
           if (!allOffers.length) {
             offerDiv.innerHTML = "<p>No AJO JSON offers returned because Campaign or Offer is in deactivate state</p>";
             return;
           }
-
-          allOffers.forEach(item => {
-            const contents = item.data?.content || [];
-            contents.forEach(contentItem => {
-              const html = contentItem["offer-item"] || "";
-              const decoded = decodeHtml(html);
-          
-              const wrapper = document.createElement("div");
-              wrapper.className = "offer";
-              wrapper.innerHTML = decoded;
-          
-              offerDiv.appendChild(wrapper);
+          (response.propositions || []).forEach(proposition => {
+          (proposition.items || []).forEach(item => {
+            allOffers.push({
+              proposition,
+              item,
+              offerId: proposition.id,
+              trackingToken:
+                proposition.scopeDetails.characteristics.eventToken
             });
           });
+        });
+
+        const impressionItems = [];
+        allOffers.forEach(item => {
+          const decoded = decodeHtml(item.item.data?.content || "");
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = decoded;
+
+          [...tempDiv.children].forEach(child => {
+            if (child.classList.contains("offer-item")) {
+              const offerId = item.offerId;
+              const trackingToken = item.trackingToken;
+
+              if (offerId && trackingToken) {
+                impressionItems.push({ id: offerId, token: trackingToken });
+              }
+
+              offerDiv.appendChild(child);
+
+              // Click tracking
+              child.querySelectorAll("a, button").forEach(el => {
+                el.addEventListener("click", () => {
+                  const ecidValue = getECID();
+                  if (!ecidValue || !offerId || !trackingToken) {
+                    console.warn("Missing ECID, offerId, or trackingToken. Interaction event not sent.!!!!");
+                    return;
+                  }
+
+                  alloy("sendEvent", {
+                    xdm: {
+                      _id: generateUUID(),
+                      timestamp: new Date().toISOString(),
+                      eventType: "decisioning.propositionInteract",
+                      identityMap: {
+                        ECID: [{
+                          id: ecidValue,
+                          authenticatedState: "ambiguous",
+                          primary: true
+                        }]
+                      },
+                      _experience: {
+                        decisioning: {
+                          propositionEventType: {
+                            interact: 1
+                          },
+                          propositionAction: {
+                            id: item.offerId,
+                            tokens: [item.trackingToken]
+                          },
+                          
+                          propositions: [item.proposition]
+                        }
+                      }
+                    }
+                  });
+                });
+              });
+            }
+          });
+        });
+          
+         // Impression event after rendering
+        const ecidValue = getECID(); 
+        if (ecidValue) {
+
+          impressionItems.forEach(offer => {
+
+            alloy("sendEvent", {
+              xdm: {
+                _id: generateUUID(),
+                timestamp: new Date().toISOString(),
+                eventType: "decisioning.propositionDisplay",
+                identityMap: {
+                  ECID: [{
+                    id: ecidValue,
+                    authenticatedState: "ambiguous",
+                    primary: true
+                  }]
+                },
+                _experience: {
+                  decisioning: {
+                    propositionEventType: {
+                      display: 1
+                    },
+                    propositionAction: {
+                      id: offer.offerId,
+                      tokens: [offer.trackingToken]
+                    },
+                    propositions: [offer.proposition]
+                  }
+                }
+              }
+            }).then(() => {
+              console.log("✅ Excellent - propositionDisplay sent");
+            }).catch(console.error);
+
+          });
+
+        } else {
+          console.warn("Missing ECID. Skipping display event.");
+        }
         }).catch(err => {
           console.error("❌ Personalization failed:", err);
         });
