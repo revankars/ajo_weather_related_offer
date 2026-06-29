@@ -37,8 +37,16 @@ navigator.geolocation.getCurrentPosition(pos => {
 
         const allOffers = [];
 
-        (response.propositions || []).forEach(p => {
-          allOffers.push(...(p.items || []));
+        (response.propositions || []).forEach(proposition => {
+          (proposition.items || []).forEach(item => {
+            allOffers.push({
+              proposition,
+              item,
+              offerId: proposition.id,
+              trackingToken:
+                proposition.scopeDetails.characteristics.eventToken
+            });
+          });
         });
 
         if (!allOffers.length) {
@@ -49,14 +57,14 @@ navigator.geolocation.getCurrentPosition(pos => {
         const impressionItems = [];
 
         allOffers.forEach(item => {
-          const decoded = decodeHtml(item.data?.content || "");
+          const decoded = decodeHtml(item.item.data?.content || "");
           const tempDiv = document.createElement("div");
           tempDiv.innerHTML = decoded;
 
           [...tempDiv.children].forEach(child => {
             if (child.classList.contains("offer-item")) {
-              const offerId = child.getAttribute("data-offer-id");
-              const trackingToken = child.getAttribute("data-tracking-token");
+              const offerId = item.offerId;
+              const trackingToken = item.trackingToken;
 
               if (offerId && trackingToken) {
                 impressionItems.push({ id: offerId, token: trackingToken });
@@ -91,11 +99,11 @@ navigator.geolocation.getCurrentPosition(pos => {
                             interact: 1
                           },
                           propositionAction: {
-                            id: offerId,
-                            tokens: [trackingToken]
+                            id: offer.offerId,
+                            tokens: [offer.trackingToken]
                           },
                           
-                          propositions: window.latestPropositions
+                          propositions: [offer.proposition]
                         }
                       }
                     }
@@ -107,19 +115,11 @@ navigator.geolocation.getCurrentPosition(pos => {
         });
 
         // Impression event after rendering
-        if (impressionItems.length > 0) {
-          const ecidValue = getECID();
-          if (!ecidValue) {
-            console.warn("Missing ECID. Skipping impression.");
-            return;
-          }
+        const ecidValue = getECID();
 
-          // Send impression for each item
-          impressionItems.forEach(({ id, token }) => {
-            if (!id || !token) {
-              console.warn("Missing offerId or trackingToken. Skipping impression.");
-              return;
-            }
+        if (ecidValue) {
+
+          impressionItems.forEach(offer => {
 
             alloy("sendEvent", {
               xdm: {
@@ -139,18 +139,21 @@ navigator.geolocation.getCurrentPosition(pos => {
                       display: 1
                     },
                     propositionAction: {
-                      id: id,
-                      tokens: [token]
+                      id: offer.offerId,
+                      tokens: [offer.trackingToken]
                     },
-                  
-                   
-
-                    propositions: window.latestPropositions
+                    propositions: [offer.proposition]
                   }
                 }
               }
-            });
+            }).then(() => {
+              console.log("✅ Excellent - propositionDisplay sent");
+            }).catch(console.error);
+
           });
+
+        } else {
+          console.warn("Missing ECID. Skipping display event.");
         }
       }).catch(err => {
         console.error("❌ Personalization failed:", err);
