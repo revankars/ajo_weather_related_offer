@@ -11,19 +11,21 @@ function waitForAlloy(callback, interval = 100, retries = 50) {
   }
 }
 
-// Safely decode HTML content from JSON
+// Decode HTML safely
 function decodeHtml(html) {
   const txt = document.createElement("textarea");
   txt.innerHTML = html;
   return txt.value;
 }
 
+// UUID generator
 function generateUUID() {
   return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
     (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
   );
 }
 
+// Get ECID
 function getECID() {
   try {
     return _satellite.getVar("ECID");
@@ -33,13 +35,15 @@ function getECID() {
   }
 }
 
-// Fetch weather and send context to AEP
+// Main function
 function sendWeatherDataToAEP() {
   navigator.geolocation.getCurrentPosition(pos => {
     const lat = pos.coords.latitude;
     const lon = pos.coords.longitude;
 
-    fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=imperial`)
+    fetch(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=imperial`
+    )
       .then(res => res.json())
       .then(data => {
         const temp = Math.round(data.main.temp);
@@ -49,8 +53,8 @@ function sendWeatherDataToAEP() {
         document.getElementById("weatherStatus").textContent =
           `Current temperature in ${city} is ${temp}°F with ${condition}.`;
 
-        // Send personalization decision request
-        alloy("sendEvent", {
+        // AJO request
+        return alloy("sendEvent", {
           renderDecisions: true,
           personalization: {
             surfaces: [
@@ -65,112 +69,124 @@ function sendWeatherDataToAEP() {
               cityName: city
             }
           }
-        }).then(response => {
-          const offerDiv = document.getElementById("offerContainer");
-          offerDiv.innerHTML = "";
+        });
+      })
+      .then(response => {
+        const offerDiv = document.getElementById("offerContainer");
+        offerDiv.innerHTML = "";
 
-          const allOffers = [];
-          window.latestPropositions = response.propositions || [];
-          
-          (response.propositions || []).forEach(proposition => {
-          (proposition.items || []).forEach(item => {
-            allOffers.push({
-              proposition,
-              item,
-              offerId: proposition.id,
-              trackingToken:
-                proposition.scopeDetails.characteristics.eventToken
+        const impressionItems = [];
+
+        const propositions = response.propositions || [];
+        window.latestPropositions = propositions;
+
+        // Normalize offers
+        const allOffers = [];
+
+        propositions.forEach(proposition => {
+          const items = proposition.items || [];
+
+          items.forEach(item => {
+            const contents = item.data?.content || [];
+
+            contents.forEach(c => {
+              allOffers.push({
+                proposition,
+                html: c["offer-item"],
+                offerId: proposition.id,
+                trackingToken:
+                  proposition.scopeDetails?.characteristics?.eventToken
+              });
             });
           });
         });
 
         if (!allOffers.length) {
-            offerDiv.innerHTML = "<p>No AJO JSON offers returned because Campaign or Offer is in deactivate state</p>";
-            return;
+          offerDiv.innerHTML =
+            "<p>No AJO JSON offers returned because Campaign is inactive</p>";
+          return;
         }
 
-        const impressionItems = [];
-        allOffers.forEach(item => {
-          const decoded = decodeHtml(item.item.data?.content || "");
+        // Render offers
+        allOffers.forEach(offer => {
+          const decoded = decodeHtml(offer.html || "");
+
           const tempDiv = document.createElement("div");
           tempDiv.innerHTML = decoded;
 
           [...tempDiv.children].forEach(child => {
-            if (child.classList.contains("offer-item")) {
-              const offerId = item.offerId;
-              const trackingToken = item.trackingToken;
+            offerDiv.appendChild(child);
 
-              if (offerId && trackingToken) {
-                impressionItems.push({ id: offerId, token: trackingToken });
-              }
+            // Track impression data
+            impressionItems.push({
+              proposition: offer.proposition,
+              offerId: offer.offerId,
+              trackingToken: offer.trackingToken
+            });
 
-              offerDiv.appendChild(child);
+            // Click tracking
+            child.querySelectorAll("a, button").forEach(el => {
+              el.addEventListener("click", () => {
+                const ecidValue = getECID();
 
-              // Click tracking
-              child.querySelectorAll("a, button").forEach(el => {
-                el.addEventListener("click", () => {
-                  const ecidValue = getECID();
-                  if (!ecidValue || !offerId || !trackingToken) {
-                    console.warn("Missing ECID, offerId, or trackingToken. Interaction event not sent.!!!!");
-                    return;
-                  }
+                if (!ecidValue || !offer.offerId || !offer.trackingToken) {
+                  console.warn("Missing tracking data");
+                  return;
+                }
 
-                  alloy("sendEvent", {
-                    xdm: {
-                      _id: generateUUID(),
-                      timestamp: new Date().toISOString(),
-                      eventType: "decisioning.propositionInteract",
-                      identityMap: {
-                        ECID: [{
+                alloy("sendEvent", {
+                  xdm: {
+                    _id: generateUUID(),
+                    timestamp: new Date().toISOString(),
+                    eventType: "decisioning.propositionInteract",
+                    identityMap: {
+                      ECID: [
+                        {
                           id: ecidValue,
                           authenticatedState: "ambiguous",
                           primary: true
-                        }]
-                      },
-                      _experience: {
-                        decisioning: {
-                          propositionEventType: {
-                            interact: 1
-                          },
-                          propositionAction: {
-                            id: item.offerId,
-                            tokens: [item.trackingToken]
-                          },
-                          
-                          propositions: [item.proposition]
                         }
+                      ]
+                    },
+                    _experience: {
+                      decisioning: {
+                        propositionEventType: { interact: 1 },
+                        propositionAction: {
+                          id: offer.offerId,
+                          tokens: [offer.trackingToken]
+                        },
+                        propositions: [offer.proposition]
                       }
                     }
-                  });
+                  }
                 });
               });
-            }
+            });
           });
         });
-          
-         // Impression event after rendering
-        const ecidValue = getECID(); 
+
+        // Impression event
+        const ecidValue = getECID();
+
         if (ecidValue) {
-
           impressionItems.forEach(offer => {
-
             alloy("sendEvent", {
               xdm: {
                 _id: generateUUID(),
                 timestamp: new Date().toISOString(),
                 eventType: "decisioning.propositionDisplay",
                 identityMap: {
-                  ECID: [{
-                    id: ecidValue,
-                    authenticatedState: "ambiguous",
-                    primary: true
-                  }]
+                  ECID: [
+                    {
+                      id: ecidValue,
+                      authenticatedState: "ambiguous",
+                      primary: true
+                    }
+                  ]
                 },
                 _experience: {
                   decisioning: {
-                    propositionEventType: {
-                      display: 1
-                    },
+                    propositionEventType: { display: 1 },
                     propositionAction: {
                       id: offer.offerId,
                       tokens: [offer.trackingToken]
@@ -179,21 +195,16 @@ function sendWeatherDataToAEP() {
                   }
                 }
               }
-            }).then(() => {
-              console.log("✅ Excellent - propositionDisplay sent");
-            }).catch(console.error);
-
+            })
+            .then(() => console.log("✅ propositionDisplay sent"))
+            .catch(console.error);
           });
-
         } else {
           console.warn("Missing ECID. Skipping display event.");
         }
-        }).catch(err => {
-          console.error("❌ Personalization failed:", err);
-        });
       })
-      .catch(error => {
-        console.error("Failed to fetch weather data:", error);
+      .catch(err => {
+        console.error("❌ Personalization failed:", err);
       });
   });
 }
